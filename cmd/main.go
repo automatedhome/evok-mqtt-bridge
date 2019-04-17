@@ -10,7 +10,6 @@ import (
         "time"
         "fmt"
         "strings"
-        "strconv"
 
         "github.com/eclipse/paho.mqtt.golang"
 )
@@ -19,7 +18,7 @@ type Message struct {
 	Command string  `json:"cmd,omitempty"`
         Circuit string  `json:"circuit"`
         Device  string  `json:"dev"`
-        Value   float64 `json:"value"`
+        Value   json.Number `json:"value"`
 }
 
 var MQTTClient mqtt.Client
@@ -33,7 +32,7 @@ func onEvokMessage(message string, socket gowebsocket.Socket) {
         }
 
 	topic := "evok/" + msg.Device + "/" + msg.Circuit + "/value"
-	token := MQTTClient.Publish(topic, 0, false, fmt.Sprintf("%f", msg.Value))
+	token := MQTTClient.Publish(topic, 0, false, fmt.Sprintf("%v", msg.Value))
 	token.Wait()
 	if token.Error() != nil {
 		log.Printf("Failed to publish packet: %s", token.Error())
@@ -43,8 +42,8 @@ func onEvokMessage(message string, socket gowebsocket.Socket) {
 func onMQTTMessage(client mqtt.Client, message mqtt.Message) {
 	var msg Message
 	topic := message.Topic()
-	msg.Value, _ = strconv.ParseFloat(string(message.Payload()), 64)
-	log.Printf("Received message on MQTT topic: '%s' with payload: '%f'\n", topic, msg.Value)
+	msg.Value = json.Number(message.Payload())
+	log.Printf("Received message on MQTT topic: '%s' with payload: '%v'\n", topic, msg.Value)
 	msg.Command = "set"
 	msg.Device = strings.Split(topic, "/")[1]
 	msg.Circuit = strings.Split(topic, "/")[2]
