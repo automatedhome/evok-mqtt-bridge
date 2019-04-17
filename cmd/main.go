@@ -58,9 +58,9 @@ func onMQTTMessage(client mqtt.Client, message mqtt.Message) {
 }
 
 func main() {
-	broker := flag.String("broker", "tcp://192.168.20.20:1883", "The full url of the MQTT server to connect to ex: tcp://127.0.0.1:1883")
+	broker := flag.String("broker", "tcp://127.0.0.1:1883", "The full url of the MQTT server to connect to ex: tcp://127.0.0.1:1883")
 	clientID := flag.String("clientid", "evok", "A clientid for the connection")
-	evok := flag.String("evok", "ws://192.168.20.20:8080/ws", "The full url of the websocket EVOK API: http://127.0.0.1:8080/ws")
+	evok := flag.String("evok", "ws://127.0.0.1:8080/ws", "The full url of the websocket EVOK API: http://127.0.0.1:8080/ws")
 	flag.Parse()
 
         interrupt := make(chan os.Signal, 1)
