@@ -1,35 +1,36 @@
 package main
 
 import (
-        "github.com/sacOO7/gowebsocket"
-        "log"
-        "os"
-        "os/signal"
-        "encoding/json"
-        "flag"
-        "time"
-        "fmt"
-        "strings"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"strings"
+	"time"
 
-        "github.com/eclipse/paho.mqtt.golang"
+	"github.com/sacOO7/gowebsocket"
+
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 type Message struct {
-	Command string  `json:"cmd,omitempty"`
-        Circuit string  `json:"circuit"`
-        Device  string  `json:"dev"`
-        Value   json.Number `json:"value"`
+	Command string      `json:"cmd,omitempty"`
+	Circuit string      `json:"circuit"`
+	Device  string      `json:"dev"`
+	Value   json.Number `json:"value"`
 }
 
 var MQTTClient mqtt.Client
 var EvokClient gowebsocket.Socket
 
 func onEvokMessage(message string, socket gowebsocket.Socket) {
-        var msg Message
-        if err := json.Unmarshal([]byte(message), &msg); err != nil {
-        	log.Printf("Failed to unmarshal JSON data from EVOK message: %s\n", message)
-        	return
-        }
+	var msg Message
+	if err := json.Unmarshal([]byte(message), &msg); err != nil {
+		log.Printf("Failed to unmarshal JSON data from EVOK message: %s\n", message)
+		return
+	}
 
 	topic := "evok/" + msg.Device + "/" + msg.Circuit + "/value"
 	token := MQTTClient.Publish(topic, 0, false, fmt.Sprintf("%v", msg.Value))
@@ -48,12 +49,12 @@ func onMQTTMessage(client mqtt.Client, message mqtt.Message) {
 	msg.Device = strings.Split(topic, "/")[1]
 	msg.Circuit = strings.Split(topic, "/")[2]
 
-        text, err := json.Marshal(msg)
-        if err != nil {
-        	log.Printf("Wrong data received on MQTT topic '%s' with payload: %+v\n", topic, msg)
-        	return
-        }
-        EvokClient.SendText(string(text))
+	text, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("Wrong data received on MQTT topic '%s' with payload: %+v\n", topic, msg)
+		return
+	}
+	EvokClient.SendText(string(text))
 }
 
 func main() {
@@ -62,10 +63,10 @@ func main() {
 	evok := flag.String("evok", "ws://127.0.0.1:8080/ws", "The full url of the websocket EVOK API: http://127.0.0.1:8080/ws")
 	flag.Parse()
 
-        interrupt := make(chan os.Signal, 1)
-        signal.Notify(interrupt, os.Interrupt)
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
 
-        opts := mqtt.NewClientOptions().AddBroker(*broker).SetClientID(*clientID)
+	opts := mqtt.NewClientOptions().AddBroker(*broker).SetClientID(*clientID)
 	opts.SetKeepAlive(2 * time.Second)
 	opts.SetPingTimeout(1 * time.Second)
 	opts.SetAutoReconnect(true)
@@ -80,27 +81,27 @@ func main() {
 	}
 	log.Printf("Connected to %s as %s and listening\n", *broker, *clientID)
 
-        EvokClient = gowebsocket.New(*evok)
-        EvokClient.OnConnectError = func(err error, socket gowebsocket.Socket) {
-                log.Println("Recieved connect error ", err)
-        }
+	EvokClient = gowebsocket.New(*evok)
+	EvokClient.OnConnectError = func(err error, socket gowebsocket.Socket) {
+		log.Println("Recieved connect error ", err)
+	}
 
-        EvokClient.OnTextMessage = onEvokMessage
+	EvokClient.OnTextMessage = onEvokMessage
 
-        EvokClient.OnDisconnected = func(err error, socket gowebsocket.Socket) {
-                log.Println("Disconnected from EVOK server ")
-                return
-        }
+	EvokClient.OnDisconnected = func(err error, socket gowebsocket.Socket) {
+		log.Println("Disconnected from EVOK server ")
+		return
+	}
 
-        EvokClient.Connect()
+	EvokClient.Connect()
 	log.Printf("Connected to EVOK on %s\n", *evok)
-	
-        for {
-                select {
-                case <-interrupt:
-                        log.Println("interrupt")
-                        EvokClient.Close()
-                        return
-                }
-        }
+
+	for {
+		select {
+		case <-interrupt:
+			log.Println("interrupt")
+			EvokClient.Close()
+			return
+		}
+	}
 }
