@@ -32,6 +32,11 @@ func onEvokMessage(message string, socket gowebsocket.Socket) {
 		return
 	}
 
+	// FIXME: Exclude input 4 as this is constantly floating
+	if msg.Device == "input" && msg.Circuit == "4" {
+		return
+	}
+
 	topic := "evok/" + msg.Device + "/" + msg.Circuit + "/value"
 	token := MQTTClient.Publish(topic, 0, false, fmt.Sprintf("%v", msg.Value))
 	token.Wait()
