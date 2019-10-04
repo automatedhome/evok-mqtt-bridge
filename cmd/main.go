@@ -25,6 +25,29 @@ type Message struct {
 var MQTTClient mqtt.Client
 var EvokClient gowebsocket.Socket
 
+func topicMapper(device string, circuit string) string {
+	topic := ""
+	if device == "temp" {
+		switch circuit {
+		case "28FF0A9171150270":
+			topic = "solar/temperature/in"
+		case "28FF1A181515019F":
+			topic = "solar/temperature/out"
+		case "28FF4C30041503A7":
+			topic = "tank/temperature/up"
+		case "28FF4D15151501C6":
+			topic = "heater/temperature/in"
+		case "28FF5AF502150270":
+			topic = "heater/temperature/out"
+		case "287CECBF060000DA":
+			topic = "climate/temperature/outside"
+		case "28FF89DB06000034":
+			topic = "climate/temperature/inside"
+		}
+	}
+	return topic
+}
+
 func onEvokMessage(message string, socket gowebsocket.Socket) {
 	var msg Message
 	if err := json.Unmarshal([]byte(message), &msg); err != nil {
@@ -37,7 +60,11 @@ func onEvokMessage(message string, socket gowebsocket.Socket) {
 		return
 	}
 
-	topic := "evok/" + msg.Device + "/" + msg.Circuit + "/value"
+	topic := topicMapper(msg.Device, msg.Circuit)
+	if topic == "" {
+		topic = "evok/" + msg.Device + "/" + msg.Circuit + "/value"
+	}
+
 	token := MQTTClient.Publish(topic, 0, false, fmt.Sprintf("%v", msg.Value))
 	token.Wait()
 	if token.Error() != nil {
