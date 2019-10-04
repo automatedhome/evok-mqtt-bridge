@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -11,45 +12,18 @@ import (
 	"time"
 
 	"github.com/sacOO7/gowebsocket"
+	"gopkg.in/yaml.v2"
 
+	types "github.com/automatedhome/evok-mqtt-bridge/pkg/types"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-type Message struct {
-	Command string      `json:"cmd,omitempty"`
-	Circuit string      `json:"circuit"`
-	Device  string      `json:"dev"`
-	Value   json.Number `json:"value"`
-}
-
+var config types.Config
 var MQTTClient mqtt.Client
 var EvokClient gowebsocket.Socket
 
-func topicMapper(device string, circuit string) string {
-	topic := ""
-	if device == "temp" {
-		switch circuit {
-		case "28FF0A9171150270":
-			topic = "solar/temperature/in"
-		case "28FF1A181515019F":
-			topic = "solar/temperature/out"
-		case "28FF4C30041503A7":
-			topic = "tank/temperature/up"
-		case "28FF4D15151501C6":
-			topic = "heater/temperature/in"
-		case "28FF5AF502150270":
-			topic = "heater/temperature/out"
-		case "287CECBF060000DA":
-			topic = "climate/temperature/outside"
-		case "28FF89DB06000034":
-			topic = "climate/temperature/inside"
-		}
-	}
-	return topic
-}
-
 func onEvokMessage(message string, socket gowebsocket.Socket) {
-	var msg Message
+	var msg types.Message
 	if err := json.Unmarshal([]byte(message), &msg); err != nil {
 		log.Printf("Failed to unmarshal JSON data from EVOK message: %s\n", message)
 		return
@@ -60,9 +34,12 @@ func onEvokMessage(message string, socket gowebsocket.Socket) {
 		return
 	}
 
-	topic := topicMapper(msg.Device, msg.Circuit)
-	if topic == "" {
-		topic = "evok/" + msg.Device + "/" + msg.Circuit + "/value"
+	topic := "evok/" + msg.Device + "/" + msg.Circuit + "/value"
+	// Map topics to new ones
+	for _, m := range config.Mappings {
+		if m.Device == msg.Device && m.Circuit == msg.Circuit {
+			topic = m.Topic
+		}
 	}
 
 	token := MQTTClient.Publish(topic, 0, false, fmt.Sprintf("%v", msg.Value))
@@ -73,7 +50,7 @@ func onEvokMessage(message string, socket gowebsocket.Socket) {
 }
 
 func onMQTTMessage(client mqtt.Client, message mqtt.Message) {
-	var msg Message
+	var msg types.Message
 	topic := message.Topic()
 	msg.Value = json.Number(message.Payload())
 	log.Printf("Received message on MQTT topic: '%s' with payload: '%v'\n", topic, msg.Value)
@@ -92,8 +69,22 @@ func onMQTTMessage(client mqtt.Client, message mqtt.Message) {
 func main() {
 	broker := flag.String("broker", "tcp://127.0.0.1:1883", "The full url of the MQTT server to connect to ex: tcp://127.0.0.1:1883")
 	clientID := flag.String("clientid", "evok", "A clientid for the connection")
+	configFile := flag.String("config", "/config.yaml", "Provide configuration file with MQTT topic mappings")
 	evok := flag.String("evok", "ws://127.0.0.1:8080/ws", "The full url of the websocket EVOK API: http://127.0.0.1:8080/ws")
 	flag.Parse()
+
+	log.Printf("Reading configuration from %s", *configFile)
+	data, err := ioutil.ReadFile(*configFile)
+	if err != nil {
+		log.Fatalf("File reading error: %v", err)
+		return
+	}
+
+	err = yaml.UnmarshalStrict(data, &config)
+	//err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
