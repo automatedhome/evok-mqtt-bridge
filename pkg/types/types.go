@@ -18,5 +18,15 @@ type mapping struct {
 }
 
 type Config struct {
-	Mappings []struct{ mapping } `yaml:"mappings"`
+	Interval int       `yaml:"sync_interval"`
+	Mappings []mapping `yaml:"mappings"`
+}
+
+type GPIOStates struct {
+	Status string `json:"status"`
+	Data   []struct {
+		Value   float64 `json:"value"`
+		Circuit string  `json:"circuit"`
+		Dev     string  `json:"dev"`
+	} `json:"data"`
 }

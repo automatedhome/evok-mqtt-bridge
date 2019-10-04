@@ -1,4 +1,5 @@
 ---
+sync_interval: 5
 mappings:
   - device: "temp"
     circuit: "28FF0A9171150270"

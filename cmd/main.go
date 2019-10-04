@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -22,6 +23,17 @@ var config types.Config
 var MQTTClient mqtt.Client
 var EvokClient gowebsocket.Socket
 
+func topicMapper(device string, circuit string) string {
+	topic := "evok/" + device + "/" + circuit + "/value"
+	// Map topics to new ones
+	for _, m := range config.Mappings {
+		if m.Device == device && m.Circuit == circuit {
+			topic = m.Topic
+		}
+	}
+	return topic
+}
+
 func onEvokMessage(message string, socket gowebsocket.Socket) {
 	var msg types.Message
 	if err := json.Unmarshal([]byte(message), &msg); err != nil {
@@ -34,13 +46,7 @@ func onEvokMessage(message string, socket gowebsocket.Socket) {
 		return
 	}
 
-	topic := "evok/" + msg.Device + "/" + msg.Circuit + "/value"
-	// Map topics to new ones
-	for _, m := range config.Mappings {
-		if m.Device == msg.Device && m.Circuit == msg.Circuit {
-			topic = m.Topic
-		}
-	}
+	topic := topicMapper(msg.Device, msg.Circuit)
 
 	token := MQTTClient.Publish(topic, 0, false, fmt.Sprintf("%v", msg.Value))
 	token.Wait()
@@ -66,11 +72,48 @@ func onMQTTMessage(client mqtt.Client, message mqtt.Message) {
 	EvokClient.SendText(string(text))
 }
 
+func synchronizer(evok string, interval int) {
+	for {
+		response, err := http.Get(evok)
+		if err != nil {
+			log.Fatalf("Couldn't connect to EVOK: %v", err)
+		}
+
+		defer response.Body.Close()
+		contents, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			log.Fatalf("Couldn't read EVOK data: %v", err)
+		}
+
+		data := types.GPIOStates{}
+		err = json.Unmarshal([]byte(contents), &data)
+		if err != nil {
+			log.Printf("Failed to unmarshal JSON data from EVOK message: %v\n", err)
+		}
+
+		log.Printf("Got data from evok: %v", data)
+
+		for _, sensor := range data.Data {
+			if sensor.Dev != "temp" {
+				continue
+			}
+			topic := topicMapper(sensor.Dev, sensor.Circuit)
+			token := MQTTClient.Publish(topic, 0, false, fmt.Sprintf("%v", sensor.Value))
+			token.Wait()
+			if token.Error() != nil {
+				log.Printf("Failed to publish packet: %s", token.Error())
+			}
+		}
+
+		time.Sleep(time.Duration(interval) * time.Minute)
+	}
+}
+
 func main() {
 	broker := flag.String("broker", "tcp://127.0.0.1:1883", "The full url of the MQTT server to connect to ex: tcp://127.0.0.1:1883")
 	clientID := flag.String("clientid", "evok", "A clientid for the connection")
 	configFile := flag.String("config", "/config.yaml", "Provide configuration file with MQTT topic mappings")
-	evok := flag.String("evok", "ws://127.0.0.1:8080/ws", "The full url of the websocket EVOK API: http://127.0.0.1:8080/ws")
+	evok := flag.String("evok", "127.0.0.1:8080", "IP address and port of EVOK API: 127.0.0.1:8080")
 	flag.Parse()
 
 	log.Printf("Reading configuration from %s", *configFile)
@@ -81,7 +124,6 @@ func main() {
 	}
 
 	err = yaml.UnmarshalStrict(data, &config)
-	//err = yaml.Unmarshal(data, &config)
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
@@ -104,7 +146,7 @@ func main() {
 	}
 	log.Printf("Connected to %s as %s and listening\n", *broker, *clientID)
 
-	EvokClient = gowebsocket.New(*evok)
+	EvokClient = gowebsocket.New("ws://" + *evok + "/ws")
 	EvokClient.OnConnectError = func(err error, socket gowebsocket.Socket) {
 		log.Println("Recieved connect error ", err)
 	}
@@ -118,6 +160,8 @@ func main() {
 
 	EvokClient.Connect()
 	log.Printf("Connected to EVOK on %s\n", *evok)
+
+	go synchronizer("http://"+*evok+"/json/all", config.Interval)
 
 	for {
 		select {
