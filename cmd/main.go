@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sacOO7/gowebsocket"
@@ -19,9 +20,13 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-var config types.Config
-var MQTTClient mqtt.Client
-var EvokClient gowebsocket.Socket
+var (
+	config     types.Config
+	MQTTClient mqtt.Client
+	EvokClient gowebsocket.Socket
+	send       sync.Mutex
+	recv       sync.Mutex
+)
 
 func topicMapper(device string, circuit string) string {
 	topic := "evok/" + device + "/" + circuit + "/value"
@@ -48,6 +53,8 @@ func onEvokMessage(message string, socket gowebsocket.Socket) {
 
 	topic := topicMapper(msg.Device, msg.Circuit)
 
+	recv.Lock()
+	defer recv.Unlock()
 	token := MQTTClient.Publish(topic, 0, false, fmt.Sprintf("%v", msg.Value))
 	token.Wait()
 	if token.Error() != nil {
@@ -69,6 +76,9 @@ func onMQTTMessage(client mqtt.Client, message mqtt.Message) {
 		log.Printf("Wrong data received on MQTT topic '%s' with payload: %+v\n", topic, msg)
 		return
 	}
+
+	send.Lock()
+	defer send.Unlock()
 	EvokClient.SendText(string(text))
 }
 
