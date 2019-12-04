@@ -22,4 +22,4 @@ mappings:
   - device: "temp"
     circuit: "28FF89DB06000034"
     topic: "climate/temperature/inside"
-    offset: -4
+    offset: -2.5
