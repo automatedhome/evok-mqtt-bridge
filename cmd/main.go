@@ -39,6 +39,18 @@ func topicMapper(device string, circuit string) string {
 	return topic
 }
 
+func applyOffset(input json.Number, topic string) string {
+	val, _ := input.Float64()
+	offset := 0.0
+	for _, m := range config.Mappings {
+		if m.Topic == topic {
+			offset = m.Offset
+			break
+		}
+	}
+	return fmt.Sprintf("%v", val+offset)
+}
+
 func onEvokMessage(message string, socket gowebsocket.Socket) {
 	var msg types.Message
 	if err := json.Unmarshal([]byte(message), &msg); err != nil {
@@ -52,10 +64,11 @@ func onEvokMessage(message string, socket gowebsocket.Socket) {
 	}
 
 	topic := topicMapper(msg.Device, msg.Circuit)
+	value := applyOffset(msg.Value, topic)
 
 	recv.Lock()
 	defer recv.Unlock()
-	token := MQTTClient.Publish(topic, 0, false, fmt.Sprintf("%v", msg.Value))
+	token := MQTTClient.Publish(topic, 0, false, value)
 	token.Wait()
 	if token.Error() != nil {
 		log.Printf("Failed to publish packet: %s", token.Error())

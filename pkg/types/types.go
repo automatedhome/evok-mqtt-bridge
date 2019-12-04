@@ -12,9 +12,10 @@ type Message struct {
 }
 
 type mapping struct {
-	Device  string `json:"device"`
-	Circuit string `json:"circuit"`
-	Topic   string `json:"topic"`
+	Device  string  `json:"device"`
+	Circuit string  `json:"circuit"`
+	Topic   string  `json:"topic"`
+	Offset  float64 `json:"offset,omitempty"`
 }
 
 type Config struct {
