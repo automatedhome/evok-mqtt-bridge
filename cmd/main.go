@@ -29,14 +29,13 @@ var (
 )
 
 func topicMapper(device string, circuit string) string {
-	topic := "evok/" + device + "/" + circuit + "/value"
 	// Map topics to new ones
 	for _, m := range config.Mappings {
 		if m.Device == device && m.Circuit == circuit {
-			topic = m.Topic
+			return m.Topic
 		}
 	}
-	return topic
+	return "evok/" + device + "/" + circuit + "/value"
 }
 
 func applyOffset(input float64, topic string) string {
@@ -117,7 +116,7 @@ func synchronizer(evok string, interval int) {
 		log.Printf("Got data from evok: %v", data)
 
 		for _, sensor := range data.Data {
-			if sensor.Dev != "temp" {
+			if sensor.Dev != "temp" && sensor.Dev != "relay" {
 				continue
 			}
 			topic := topicMapper(sensor.Dev, sensor.Circuit)
