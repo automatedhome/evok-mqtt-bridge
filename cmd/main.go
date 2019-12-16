@@ -150,6 +150,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
+	log.Printf("Reading following config from config file: %#v", config)
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
