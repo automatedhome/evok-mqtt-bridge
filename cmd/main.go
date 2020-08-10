@@ -116,7 +116,7 @@ func synchronizer(evok string, interval int) {
 		log.Printf("Got data from evok: %v", data)
 
 		for _, sensor := range data.Data {
-			if sensor.Dev != "temp" && sensor.Dev != "relay" {
+			if sensor.Dev != "temp" && sensor.Dev != "relay" && sensor.Dev != "ai" {
 				continue
 			}
 			topic := topicMapper(sensor.Dev, sensor.Circuit)
