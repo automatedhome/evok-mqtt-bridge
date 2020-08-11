@@ -128,7 +128,7 @@ func synchronizer(evok string, interval int) {
 			}
 		}
 
-		time.Sleep(time.Duration(interval) * time.Minute)
+		time.Sleep(time.Duration(interval) * time.Second)
 	}
 }
 
