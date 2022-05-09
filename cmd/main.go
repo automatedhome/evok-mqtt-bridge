@@ -95,41 +95,39 @@ func onMQTTMessage(client mqtt.Client, message mqtt.Message) {
 }
 
 func synchronizer(evok string, interval int) {
-	for {
-		response, err := http.Get(evok)
-		if err != nil {
-			log.Fatalf("Couldn't connect to EVOK: %v", err)
-		}
-
-		defer response.Body.Close()
-		contents, err := ioutil.ReadAll(response.Body)
-		if err != nil {
-			log.Fatalf("Couldn't read EVOK data: %v", err)
-		}
-
-		data := types.GPIOStates{}
-		err = json.Unmarshal([]byte(contents), &data)
-		if err != nil {
-			log.Printf("Failed to unmarshal JSON data from EVOK message: %v\n", err)
-		}
-
-		log.Printf("Got data from evok: %v", data)
-
-		for _, sensor := range data.Data {
-			if sensor.Dev != "temp" && sensor.Dev != "relay" && sensor.Dev != "ai" {
-				continue
-			}
-			topic := topicMapper(sensor.Dev, sensor.Circuit)
-			value := applyOffset(sensor.Value, topic)
-			token := MQTTClient.Publish(topic, 0, false, value)
-			token.Wait()
-			if token.Error() != nil {
-				log.Printf("Failed to publish packet: %s", token.Error())
-			}
-		}
-
-		time.Sleep(time.Duration(interval) * time.Second)
+	response, err := http.Get(evok)
+	if err != nil {
+		log.Fatalf("Couldn't connect to EVOK: %v", err)
 	}
+
+	defer response.Body.Close()
+	contents, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		log.Fatalf("Couldn't read EVOK data: %v", err)
+	}
+
+	data := types.GPIOStates{}
+	err = json.Unmarshal([]byte(contents), &data)
+	if err != nil {
+		log.Printf("Failed to unmarshal JSON data from EVOK message: %v\n", err)
+	}
+
+	log.Printf("Got data from evok: %v", data)
+
+	for _, sensor := range data.Data {
+		if sensor.Dev != "temp" && sensor.Dev != "relay" && sensor.Dev != "ai" {
+			continue
+		}
+		topic := topicMapper(sensor.Dev, sensor.Circuit)
+		value := applyOffset(sensor.Value, topic)
+		token := MQTTClient.Publish(topic, 0, false, value)
+		token.Wait()
+		if token.Error() != nil {
+			log.Printf("Failed to publish packet: %s", token.Error())
+		}
+	}
+
+	time.Sleep(time.Duration(interval) * time.Second)
 }
 
 func main() {
@@ -179,20 +177,14 @@ func main() {
 
 	EvokClient.OnDisconnected = func(err error, socket gowebsocket.Socket) {
 		log.Println("Disconnected from EVOK server ")
-		return
 	}
 
 	EvokClient.Connect()
+	defer EvokClient.Close()
+
 	log.Printf("Connected to EVOK on %s\n", *evok)
 
-	go synchronizer("http://"+*evok+"/json/all", config.Interval)
-
 	for {
-		select {
-		case <-interrupt:
-			log.Println("interrupt")
-			EvokClient.Close()
-			return
-		}
+		synchronizer("http://"+*evok+"/json/all", config.Interval)
 	}
 }

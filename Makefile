@@ -1,6 +1,3 @@
-GO111MODULE=on
-export GO111MODULE
-
 APP=evok-mqtt-bridge
 IMAGE=automatedhome/$(APP)
 
